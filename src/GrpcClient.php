@@ -17,8 +17,10 @@ use Hyperf\Coordinator\CoordinatorManager;
 use Hyperf\Engine\Http\V2\Request;
 use Hyperf\Grpc\Parser;
 use Hyperf\Http2Client\Client;
+use Hyperf\Nacos\Application;
 use Hyperf\Nacos\Config;
 use Hyperf\Nacos\Exception\ConnectToServerFailedException;
+use Hyperf\Nacos\Exception\RequestException;
 use Hyperf\Nacos\Protobuf\Any;
 use Hyperf\Nacos\Protobuf\Metadata;
 use Hyperf\Nacos\Protobuf\Payload;
@@ -30,6 +32,7 @@ use Hyperf\Nacos\Protobuf\Response\Response;
 use Hyperf\Nacos\Provider\AccessToken;
 use Hyperf\Support\Network;
 use Psr\Container\ContainerInterface;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
 use Throwable;
 use Crayxn\ServiceGovernanceNacosGrpc\ListenHandler\SubscriberNotifyHandler;
@@ -45,6 +48,8 @@ class GrpcClient
     protected ?Client $client = null;
 
     protected ?LoggerInterface $logger = null;
+
+    protected Application $app;
 
     public int $streamId;
 
@@ -67,6 +72,9 @@ class GrpcClient
         if ($this->container->has(StdoutLoggerInterface::class)) {
             $this->logger = $this->container->get(StdoutLoggerInterface::class);
         }
+        if ($this->container->has(Application::class)) {
+            $this->app = $this->container->get(Application::class);
+        }
 
         $this->subscribeNotifyHandler = $this->container->get(SubscriberNotifyHandler::class);
 
@@ -74,8 +82,6 @@ class GrpcClient
             //more naming
             'NotifySubscriberRequest' => NotifySubscriberRequest::class
         ]);
-
-        $this->reconnect();
     }
 
     public function request(RequestInterface $request, ?Client $client = null): Response
@@ -92,7 +98,12 @@ class GrpcClient
             ]),
         ]);
 
-        $client ??= $this->client;
+        if(!$client) {
+            if (!$this->client) {
+                $this->reconnect();
+            }
+            $client = $this->client;
+        }
 
         $response = $client->request(
             new Request('/Request/request', 'POST', Parser::serializeMessage($payload), $this->grpcDefaultHeaders())
@@ -276,5 +287,17 @@ class GrpcClient
                 $subscriber instanceof RequestInterface && $this->request($subscriber);
             }
         }
+    }
+
+    private function handleResponse(ResponseInterface $response): array
+    {
+        $statusCode = $response->getStatusCode();
+        $contents = (string) $response->getBody();
+
+        if ($statusCode !== 200) {
+            throw new RequestException($contents, $statusCode);
+        }
+
+        return Json::decode($contents);
     }
 }

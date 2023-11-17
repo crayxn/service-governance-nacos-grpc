@@ -35,15 +35,12 @@ class SubscriberNotifyHandler implements ListenHandlerInterface
         /**
          * @var NotifySubscriberRequest $response
          */
-        foreach ($response->serviceInfo as $service) {
-            //todo 需要区分 namespace
-            $this->instanceManager->updateInstances("{$service['groupName']}@@{$service['name']}", array_map(function ($item) {
-                if (($item['healthy'] ?? 0) == 1 && ($item['enabled']) ?? 0 == 1) {
-                    return $item;
-                }
-                return null;
-            }, $service['hosts'] ?? []));
-        }
+        $this->instanceManager->updateInstances("{$response->serviceInfo['groupName']}@@{$response->serviceInfo['name']}", array_map(function ($item) {
+            if (($item['healthy'] ?? 0) == 1 && ($item['enabled']) ?? 0 == 1) {
+                return $item;
+            }
+            return null;
+        }, $response->serviceInfo['hosts'] ?? []));
     }
 
     public function ack(Response $response): Request
