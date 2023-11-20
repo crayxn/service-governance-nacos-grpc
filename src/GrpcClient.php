@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace Crayxn\ServiceGovernanceNacosGrpc;
 
+use Crayxn\ServiceGovernanceNacosGrpc\Response\QueryServiceResponse;
 use Exception;
 use Hyperf\Codec\Json;
 use Hyperf\Collection\Arr;
@@ -80,7 +81,8 @@ class GrpcClient
 
         $this->mapping = array_merge(Mapping::$mappings, [
             //more naming
-            'NotifySubscriberRequest' => NotifySubscriberRequest::class
+            'NotifySubscriberRequest' => NotifySubscriberRequest::class,
+            'QueryServiceResponse' => QueryServiceResponse::class,
         ]);
     }
 
@@ -98,7 +100,7 @@ class GrpcClient
             ]),
         ]);
 
-        if(!$client) {
+        if (!$client) {
             if (!$this->client) {
                 $this->reconnect();
             }
@@ -109,7 +111,7 @@ class GrpcClient
             new Request('/Request/request', 'POST', Parser::serializeMessage($payload), $this->grpcDefaultHeaders())
         );
 
-        return Response::jsonDeSerialize($response->getBody());
+        return $this->toResponse($response->getBody());
     }
 
     public function write(int $streamId, RequestInterface $request, ?Client $client = null): bool
@@ -292,7 +294,7 @@ class GrpcClient
     private function handleResponse(ResponseInterface $response): array
     {
         $statusCode = $response->getStatusCode();
-        $contents = (string) $response->getBody();
+        $contents = (string)$response->getBody();
 
         if ($statusCode !== 200) {
             throw new RequestException($contents, $statusCode);

@@ -7,20 +7,21 @@ declare(strict_types=1);
 
 namespace Crayxn\ServiceGovernanceNacosGrpc\ListenHandler;
 
+use Crayxn\ServiceGovernanceNacosGrpc\Event\NacosSubscriberNotify;
+use Crayxn\ServiceGovernanceNacosGrpc\Response\NotifySubscriberRequest;
 use Hyperf\Contract\StdoutLoggerInterface;
 use Hyperf\Nacos\Protobuf\ListenHandlerInterface;
 use Hyperf\Nacos\Protobuf\Request\NotifySubscriberResponse;
 use Hyperf\Nacos\Protobuf\Request\Request;
 use Hyperf\Nacos\Protobuf\Response\Response;
-use Crayxn\ServiceGovernanceNacosGrpc\InstanceManager;
-use Crayxn\ServiceGovernanceNacosGrpc\Response\NotifySubscriberRequest;
+use Psr\EventDispatcher\EventDispatcherInterface;
 
 class SubscriberNotifyHandler implements ListenHandlerInterface
 {
 
     public function __construct(
-        protected StdoutLoggerInterface $logger,
-        protected InstanceManager       $instanceManager
+        protected StdoutLoggerInterface    $logger,
+        protected EventDispatcherInterface $dispatcher
     )
     {
     }
@@ -32,15 +33,7 @@ class SubscriberNotifyHandler implements ListenHandlerInterface
     public function handle(Response $response): void
     {
         $this->logger->debug('Nacos subscribe notify');
-        /**
-         * @var NotifySubscriberRequest $response
-         */
-        $this->instanceManager->updateInstances("{$response->serviceInfo['groupName']}@@{$response->serviceInfo['name']}", array_map(function ($item) {
-            if (($item['healthy'] ?? 0) == 1 && ($item['enabled']) ?? 0 == 1) {
-                return $item;
-            }
-            return null;
-        }, $response->serviceInfo['hosts'] ?? []));
+        $response instanceof NotifySubscriberRequest && $this->dispatcher->dispatch(new NacosSubscriberNotify($response));
     }
 
     public function ack(Response $response): Request
