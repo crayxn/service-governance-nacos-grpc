@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace Crayxn\ServiceGovernanceNacosGrpc;
 
+use Crayxn\ServiceGovernanceNacosGrpc\Model\Instance;
+use Crayxn\ServiceGovernanceNacosGrpc\Request\InstanceRequest;
 use Crayxn\ServiceGovernanceNacosGrpc\Request\ServiceQueryRequest;
 use Crayxn\ServiceGovernanceNacosGrpc\Response\QueryServiceResponse;
 use Hyperf\Contract\ConfigInterface;
@@ -75,11 +77,21 @@ class NacosGrpcDriver implements DriverInterface
 
     public function register(string $name, string $host, int $port, array $metadata): void
     {
-        // TODO: Implement register() method.
+        $instanceKey = "{$this->groupName}@@{$name}@@$host@@$port";
+        $instance = new Instance();
+        $instance->serviceName = $name;
+        $instance->ip = $host;
+        $instance->port = $port;
+        $instance->metadata = $metadata;
+        $response = $this->client->request(new InstanceRequest($instance, $name, $this->namespaceId, $this->groupName, 'registerInstance'));
+        if ($response->success) {
+            $this->registered[$instanceKey] = true;
+        }
     }
 
     public function isRegistered(string $name, string $host, int $port, array $metadata): bool
     {
-        // TODO: Implement isRegistered() method.
+        $instanceKey = "{$this->groupName}@@{$name}@@$host@@$port";
+        return $this->registered[$instanceKey] ?? false;
     }
 }
