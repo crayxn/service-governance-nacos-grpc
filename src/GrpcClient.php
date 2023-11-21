@@ -242,20 +242,35 @@ class GrpcClient
 
     private function getMetadata(RequestInterface $request): array
     {
-        if ($token = $this->getAccessToken()) {
-            return [
-                'type' => $request->getType(),
-                'clientIp' => $this->ip(),
-                'headers' => [
-                    'accessToken' => $token,
-                ],
-            ];
+        $metadata = [
+            'type' => $request->getType(),
+            'clientIp' => $this->ip()
+        ];
+
+        if (!empty($this->config->getAccessKey()) && !empty($this->config->getAccessSecret())) {
+            $metadata['headers']['data'] = $this->getStringToSign($request);
+            $metadata['headers']['ak'] = $this->config->getAccessKey();
+            $metadata['headers']['signature'] = base64_encode(hash_hmac('sha1', $metadata['headers']['data'], $this->config->getAccessSecret(), true));
         }
 
-        return [
-            'type' => $request->getType(),
-            'clientIp' => $this->ip(),
-        ];
+        if ($token = $this->getAccessToken()) {
+            $metadata['headers']['accessToken'] = $token;
+        }
+
+        return $metadata;
+    }
+
+    private function getStringToSign(RequestInterface $request): string
+    {
+        $serviceName = $request->getValue()['serviceName'] ?? '';
+        $groupName = $request->getValue()['groupName'] ?? '';
+
+        $signStr = round(microtime(true) * 1000);
+
+        if (!empty($serviceName) && !empty($groupName)) {
+            $signStr .= "@@{$groupName}@@{$serviceName}";
+        }
+        return $signStr;
     }
 
     private function grpcDefaultHeaders(): array
@@ -264,6 +279,7 @@ class GrpcClient
             'content-type' => 'application/grpc+proto',
             'te' => 'trailers',
             'user-agent' => 'Nacos-Kyy-Client:v3.0',
+            'app' => $this->clientAppName
         ];
     }
 
