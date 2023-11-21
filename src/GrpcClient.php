@@ -244,7 +244,10 @@ class GrpcClient
     {
         $metadata = [
             'type' => $request->getType(),
-            'clientIp' => $this->ip()
+            'clientIp' => $this->ip(),
+            'headers' => [
+                'app' => $this->clientAppName
+            ]
         ];
 
         if (!empty($this->config->getAccessKey()) && !empty($this->config->getAccessSecret())) {
@@ -278,8 +281,7 @@ class GrpcClient
         return [
             'content-type' => 'application/grpc+proto',
             'te' => 'trailers',
-            'user-agent' => 'Nacos-Kyy-Client:v3.0',
-            'app' => $this->clientAppName
+            'user-agent' => 'Nacos-Kyy-Client:v3.0'
         ];
     }
 
