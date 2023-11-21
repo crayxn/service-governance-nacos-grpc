@@ -42,8 +42,8 @@ class NacosGrpcDriver implements DriverInterface
         $this->logger = $container->get(StdoutLoggerInterface::class);
         $this->config = $container->get(ConfigInterface::class);
 
-        $this->groupName = $this->config->get('services.drivers.nacos.group_name', 'DEFAULT_GROUP');
-        $this->namespaceId = $this->config->get('services.drivers.nacos.namespace_id', '');
+        $this->groupName = $this->config->get('services.drivers.nacos.group_name') ?: 'DEFAULT_GROUP';
+        $this->namespaceId = $this->config->get('services.drivers.nacos.namespace_id') ?: 'public';
     }
 
     public function getNodes(string $uri, string $name, array $metadata): array
