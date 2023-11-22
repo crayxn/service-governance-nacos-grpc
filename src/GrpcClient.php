@@ -73,9 +73,7 @@ class GrpcClient
         if ($this->container->has(StdoutLoggerInterface::class)) {
             $this->logger = $this->container->get(StdoutLoggerInterface::class);
         }
-        if ($this->container->has(Application::class)) {
-            $this->app = $this->container->get(Application::class);
-        }
+        $this->app = new Application($this->config);
 
         $this->subscribeNotifyHandler = $this->container->get(SubscriberNotifyHandler::class);
 
