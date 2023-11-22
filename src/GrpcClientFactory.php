@@ -19,6 +19,7 @@ class GrpcClientFactory
         $nacosConfig = $config->get('services.drivers.nacos', []);
 
         return new GrpcClient($container, new Config([
+            'base_uri' => "http://{$nacosConfig['host']}:{$nacosConfig['port']}/",
             'host' => $nacosConfig['host'] ?? '127.0.0.1',
             'port' => $nacosConfig['port'] ?? 8848,
             'username' => $nacosConfig['username'] ?? null,
