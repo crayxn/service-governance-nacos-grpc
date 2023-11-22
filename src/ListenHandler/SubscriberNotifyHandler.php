@@ -32,7 +32,7 @@ class SubscriberNotifyHandler implements ListenHandlerInterface
      */
     public function handle(Response $response): void
     {
-        $this->logger->debug('Nacos subscribe notify');
+        $this->logger->debug('Nacos subscribe notify, serviceName:' . ($response->serviceInfo['name'] ?? '--'));
         $response instanceof NotifySubscriberRequest && $this->dispatcher->dispatch(new NacosSubscriberNotify($response));
     }
 
