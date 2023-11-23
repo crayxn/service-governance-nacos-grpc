@@ -196,6 +196,7 @@ class GrpcClient
                     }
                 } catch (Throwable $e) {
                     !$this->isWorkerExit() && $this->logger->error((string)$e);
+                    break;
                 }
             }
 
