@@ -32,4 +32,9 @@ class InstanceRequest implements RequestInterface
     {
         return 'InstanceRequest';
     }
+
+    public function getKey(): string
+    {
+        return $this->namespace . '@@' . $this->groupName . '@@' . $this->serviceName;
+    }
 }

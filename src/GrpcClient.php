@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace Crayxn\ServiceGovernanceNacosGrpc;
 
+use Crayxn\ServiceGovernanceNacosGrpc\Request\InstanceRequest;
 use Crayxn\ServiceGovernanceNacosGrpc\Response\QueryServiceResponse;
 use Exception;
 use Hyperf\Codec\Json;
@@ -59,7 +60,9 @@ class GrpcClient
     /**
      * @var array
      */
-    private array $subscriber = [];
+    private array $subscribers = [];
+
+    private array $registers = [];
 
     private SubscriberNotifyHandler $subscribeNotifyHandler;
 
@@ -88,8 +91,12 @@ class GrpcClient
     {
         // collect subscribe request
         if ($request instanceof SubscribeServiceRequest) {
-            $this->subscriber[$request->getKey()] = $request;
+            $this->subscribers[$request->getKey()] = $request;
+        } elseif ($request instanceof InstanceRequest) {
+            // collect register request
+            $this->registers[$request->getKey()] = $request;
         }
+
 
         $payload = new Payload([
             'metadata' => new Metadata($this->getMetadata($request)),
@@ -193,7 +200,9 @@ class GrpcClient
             }
 
             if (!$this->isWorkerExit()) {
+                $this->logger->info('> reconnect nacos');
                 $this->reconnect();
+                $this->reRegister();
                 $this->resubscribe();
             }
         });
@@ -300,9 +309,20 @@ class GrpcClient
 
     private function resubscribe(): void
     {
-        if (!empty($this->subscriber)) {
-            foreach ($this->subscriber as $subscriber) {
+        $this->logger->info('> resubscribe');
+        if (!empty($this->subscribers)) {
+            foreach ($this->subscribers as $subscriber) {
                 $subscriber instanceof RequestInterface && $this->request($subscriber);
+            }
+        }
+    }
+
+    private function reRegister(): void
+    {
+        $this->logger->info('> reRegister');
+        if (!empty($this->registers)) {
+            foreach ($this->registers as $register) {
+                $register instanceof RequestInterface && $this->request($register);
             }
         }
     }
