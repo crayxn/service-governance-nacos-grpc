@@ -195,7 +195,7 @@ class GrpcClient
                         $this->write($id, $this->subscribeNotifyHandler->ack($response));
                     }
                 } catch (Throwable $e) {
-                    !$this->isWorkerExit() && $this->logger->error((string)$e);
+                    !$this->isWorkerExit() && $this->logger->error("Nacos fail:{$e->getMessage()}, timestamp:" . time());
                     break;
                 }
             }
