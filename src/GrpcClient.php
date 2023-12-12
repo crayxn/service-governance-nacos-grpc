@@ -160,10 +160,19 @@ class GrpcClient
                 if (CoordinatorManager::until(Constants::WORKER_EXIT)->yield($heartbeat)) {
                     break;
                 }
-                $res = $this->request(new HealthCheckRequest(), $client);
-                if ($res->errorCode !== 0) {
-                    $this->logger?->error('Health check failed, the result is ' . (string)$res);
+                try {
+                    $res = $this->request(new HealthCheckRequest(), $client);
+                    if ($res->errorCode == 0) {
+                        continue;
+                    }
+                    $error = (string)$res;
+                } catch (Throwable $exception) {
+                    $error = $exception->getMessage();
                 }
+                // nacos fail
+                $this->logger?->error('Health check failed, error ' . $error);
+                $client->close();
+                break;
             }
         });
     }
@@ -219,13 +228,14 @@ class GrpcClient
     protected function serverCheck(): bool
     {
         $request = new ServerCheckRequest();
-
+        $tryTimes = 0;
         while (true) {
             try {
+                ++$tryTimes;
                 $response = $this->request($request);
                 if ($response->errorCode !== 0) {
                     $this->logger?->error('Nacos check server failed.');
-                    if (CoordinatorManager::until(Constants::WORKER_EXIT)->yield(5)) {
+                    if ($tryTimes > 2 || CoordinatorManager::until(Constants::WORKER_EXIT)->yield(5)) {
                         break;
                     }
                     continue;
@@ -233,14 +243,14 @@ class GrpcClient
 
                 return true;
             } catch (Exception $exception) {
-                $this->logger?->error((string)$exception);
+                $this->logger?->error($exception->getMessage());
                 if (CoordinatorManager::until(Constants::WORKER_EXIT)->yield(5)) {
                     break;
                 }
             }
         }
 
-        throw new ConnectToServerFailedException('the nacos server is not ready to work in 30 seconds, connect to server failed');
+        throw new ConnectToServerFailedException('the nacos server is not ready to work in 15 seconds, connect to server failed');
     }
 
     private function isWorkerExit(): bool

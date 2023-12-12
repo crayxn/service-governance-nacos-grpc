@@ -14,7 +14,6 @@ use Crayxn\ServiceGovernanceNacosGrpc\Response\QueryServiceResponse;
 use Hyperf\Contract\ConfigInterface;
 use Hyperf\Contract\StdoutLoggerInterface;
 use Hyperf\ServiceGovernance\DriverInterface;
-use Hyperf\ServiceGovernanceNacos\Client;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Crayxn\ServiceGovernanceNacosGrpc\Request\SubscribeServiceRequest;
@@ -50,28 +49,35 @@ class NacosGrpcDriver implements DriverInterface
     {
         $serviceKey = "{$this->groupName}@@{$name}";
         $nodes = [];
-        /**
-         * query service
-         * @var ?QueryServiceResponse $queryServiceResponse
-         */
-        $queryServiceResponse = $this->client->request(
-            new ServiceQueryRequest($name, true, $this->namespaceId, $this->groupName)
-        );
-        if ($queryServiceResponse instanceof QueryServiceResponse) {
-            $nodes = array_map(fn($item) => [
-                'host' => $item['ip'],
-                'port' => $item['port'],
-                'weight' => intval(100 * ($item['weight'] ?? 1)),
-            ], $queryServiceResponse->serviceInfo['hosts'] ?? []);
-        }
-        //check subscribe
-        if (!empty($nodes) && !array_key_exists($serviceKey, $this->subscribed)) {
-            //subscribe
-            $response = $this->client->request(new SubscribeServiceRequest($name, true, $this->namespaceId, $this->groupName));
-            if ($response->success) {
-                $this->subscribed[$serviceKey] = true;
+        try {
+            /**
+             * query service
+             * @var ?QueryServiceResponse $queryServiceResponse
+             */
+            $queryServiceResponse = $this->client->request(
+                new ServiceQueryRequest($name, true, $this->namespaceId, $this->groupName)
+            );
+            if ($queryServiceResponse instanceof QueryServiceResponse) {
+                $nodes = array_map(fn($item) => [
+                    'host' => $item['ip'],
+                    'port' => $item['port'],
+                    'weight' => intval(100 * ($item['weight'] ?? 1)),
+                ], $queryServiceResponse->serviceInfo['hosts'] ?? []);
             }
+            //check subscribe
+            if (!empty($nodes) && !array_key_exists($serviceKey, $this->subscribed)) {
+                //subscribe
+                $response = $this->client->request(new SubscribeServiceRequest($name, true, $this->namespaceId, $this->groupName));
+                if ($response->success) {
+                    $this->subscribed[$serviceKey] = true;
+                } else {
+                    throw new \Exception('subscribe fail,' . $response);
+                }
+            }
+        } catch (\Throwable $exception) {
+            $this->logger->warning('get service nodes fail!' . $exception->getMessage());
         }
+
         return $nodes;
     }
 
@@ -83,9 +89,16 @@ class NacosGrpcDriver implements DriverInterface
         $instance->ip = $host;
         $instance->port = $port;
         $instance->metadata = $metadata;
-        $response = $this->client->request(new InstanceRequest($instance, $name, $this->namespaceId, $this->groupName, 'registerInstance'));
-        if ($response->success) {
-            $this->registered[$instanceKey] = true;
+        try {
+            $response = $this->client->request(new InstanceRequest($instance, $name, $this->namespaceId, $this->groupName, 'registerInstance'));
+            if ($response->success) {
+                $this->registered[$instanceKey] = true;
+                $this->logger->debug("service register success! [service]{$instanceKey}");
+            } else {
+                $this->logger->error("service register fail! [service]{$instanceKey} [error]$response");
+            }
+        } catch (\Throwable $exception) {
+            $this->logger->error("service register fail! [service]{$instanceKey} [error] {$exception->getMessage()}");
         }
     }
 
