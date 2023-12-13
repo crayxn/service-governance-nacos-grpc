@@ -139,7 +139,7 @@ class GrpcClient
         $this->client = new Client(
             $this->config->getHost() . ':' . ($this->config->getPort() + 1000),
             [
-                'heartbeat' => 60,
+                'heartbeat' => null,
             ]
         );
         if ($this->logger) {
