@@ -75,7 +75,8 @@ class NacosGrpcDriver implements DriverInterface
                 }
             }
         } catch (\Throwable $exception) {
-            $this->logger->warning('get service nodes fail!' . $exception->getMessage());
+            $this->logger->warning('get service nodes fail!');
+            $this->logger->error($exception->getMessage());
         }
 
         return $nodes;
