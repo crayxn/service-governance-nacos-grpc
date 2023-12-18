@@ -286,7 +286,7 @@ class GrpcClient
         $serviceName = $request->getValue()['serviceName'] ?? '';
         $groupName = $request->getValue()['groupName'] ?? '';
 
-        $signStr = round(microtime(true) * 1000);
+        $signStr = (string)round(microtime(true) * 1000);
 
         if (!empty($serviceName) && !empty($groupName)) {
             $signStr .= "@@{$groupName}@@{$serviceName}";
