@@ -106,6 +106,22 @@ class NacosGrpcDriver implements DriverInterface
     public function isRegistered(string $name, string $host, int $port, array $metadata): bool
     {
         $instanceKey = "{$this->groupName}@@{$name}@@$host@@$port";
-        return $this->registered[$instanceKey] ?? false;
+        if (isset($this->registered[$instanceKey]) && $this->registered[$instanceKey]) {
+            return true;
+        }
+        //remote
+        try {
+            /**
+             * @var QueryServiceResponse $response
+             */
+            $response = $this->client->request(new ServiceQueryRequest($name, true, $this->namespaceId, $this->groupName));
+            foreach ($response->serviceInfo['hosts'] ?? [] as $item) {
+                if ($item['ip'] == $host && $item['port'] == $port) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $exception) {
+        }
+        return false;
     }
 }
