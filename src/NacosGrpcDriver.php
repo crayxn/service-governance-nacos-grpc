@@ -94,7 +94,7 @@ class NacosGrpcDriver implements DriverInterface
             $response = $this->client->request(new InstanceRequest($instance, $name, $this->namespaceId, $this->groupName, 'registerInstance'));
             if ($response->success) {
                 $this->registered[$instanceKey] = true;
-                $this->logger->debug("service register success! [service]{$instanceKey}");
+                $this->logger->info("service register success! [service]{$instanceKey}");
             } else {
                 $this->logger->error("service register fail! [service]{$instanceKey} [error]$response");
             }
