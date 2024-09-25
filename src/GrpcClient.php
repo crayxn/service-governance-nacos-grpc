@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace Crayxn\ServiceGovernanceNacosGrpc;
 
+use Crayxn\ServiceGovernanceNacosGrpc\Request\ClientDetectionResponse;
 use Crayxn\ServiceGovernanceNacosGrpc\Request\InstanceRequest;
+use Crayxn\ServiceGovernanceNacosGrpc\Response\ClientDetectionRequest;
 use Crayxn\ServiceGovernanceNacosGrpc\Response\QueryServiceResponse;
 use Exception;
 use Hyperf\Codec\Json;
@@ -43,8 +45,7 @@ use Crayxn\ServiceGovernanceNacosGrpc\Request\SubscribeServiceRequest;
 use Crayxn\ServiceGovernanceNacosGrpc\Response\NotifySubscriberRequest;
 use function Hyperf\Coroutine\go;
 
-class GrpcClient
-{
+class GrpcClient {
     use AccessToken;
 
     protected ?Client $client = null;
@@ -71,8 +72,7 @@ class GrpcClient
         protected Config             $config,
         protected string             $namespaceId = '',
         protected string             $clientAppName = '',
-    )
-    {
+    ) {
         if ($this->container->has(StdoutLoggerInterface::class)) {
             $this->logger = $this->container->get(StdoutLoggerInterface::class);
         }
@@ -83,12 +83,12 @@ class GrpcClient
         $this->mapping = array_merge(Mapping::$mappings, [
             //more naming
             'NotifySubscriberRequest' => NotifySubscriberRequest::class,
-            'QueryServiceResponse' => QueryServiceResponse::class,
+            'QueryServiceResponse'    => QueryServiceResponse::class,
+            'ClientDetectionRequest'  => ClientDetectionRequest::class,
         ]);
     }
 
-    public function request(RequestInterface $request, ?Client $client = null): Response
-    {
+    public function request(RequestInterface $request, ?Client $client = null): Response {
         // collect subscribe request
         if ($request instanceof SubscribeServiceRequest) {
             $this->subscribers[$request->getKey()] = $request;
@@ -100,7 +100,7 @@ class GrpcClient
 
         $payload = new Payload([
             'metadata' => new Metadata($this->getMetadata($request)),
-            'body' => new Any([
+            'body'     => new Any([
                 'value' => Json::encode($request->getValue()),
             ]),
         ]);
@@ -119,11 +119,10 @@ class GrpcClient
         return $this->toResponse($response->getBody());
     }
 
-    public function write(int $streamId, RequestInterface $request, ?Client $client = null): bool
-    {
+    public function write(int $streamId, RequestInterface $request, ?Client $client = null): bool {
         $payload = new Payload([
             'metadata' => new Metadata($this->getMetadata($request)),
-            'body' => new Any([
+            'body'     => new Any([
                 'value' => Json::encode($request->getValue()),
             ]),
         ]);
@@ -133,13 +132,14 @@ class GrpcClient
         return $client->write($streamId, Parser::serializeMessage($payload));
     }
 
-    protected function reconnect(): void
-    {
+    protected function reconnect(): void {
         $this->client && $this->client->close();
         $this->client = new Client(
             $this->config->getHost() . ':' . ($this->config->getPort() + 1000),
             [
-                'heartbeat' => 20,
+                //来自go nacos sdk 默认设置
+                'heartbeat' => $this->config->getGrpc()['client_heartbeat'] ?? 60,
+                'timeout'   => $this->config->getGrpc()['client_timeout'] ?? 20
             ]
         );
         if ($this->logger) {
@@ -151,10 +151,9 @@ class GrpcClient
         $this->healthCheck();
     }
 
-    protected function healthCheck(): void
-    {
+    protected function healthCheck(): void {
         go(function () {
-            $client = $this->client;
+            $client    = $this->client;
             $heartbeat = $this->config->getGrpc()['heartbeat'];
             while ($heartbeat > 0 && $client->inLoop()) {
                 if (CoordinatorManager::until(Constants::WORKER_EXIT)->yield($heartbeat)) {
@@ -177,8 +176,7 @@ class GrpcClient
         });
     }
 
-    protected function ip(): string
-    {
+    protected function ip(): string {
         if ($this->container->has(IPReaderInterface::class)) {
             return $this->container->get(IPReaderInterface::class)->read();
         }
@@ -186,8 +184,7 @@ class GrpcClient
         return Network::ip();
     }
 
-    protected function bindStreamCall(): int
-    {
+    protected function bindStreamCall(): int {
         $id = $this->client->send(new Request('/BiRequestStream/requestBiStream', 'POST', '', $this->grpcDefaultHeaders(), true));
         go(function () use ($id) {
             $client = $this->client;
@@ -198,8 +195,11 @@ class GrpcClient
                     }
                     $response = $client->recv($id, -1);
                     $response = $this->toResponse($response->getBody());
-                    // handle subscriber notify
-                    if ($response instanceof NotifySubscriberRequest) {
+                    //handle
+                    if ($response instanceof ClientDetectionRequest) {
+                        $this->write($id, new ClientDetectionResponse(200, 0, true, '', $response->requestId));
+                    } elseif ($response instanceof NotifySubscriberRequest) {
+                        // handle subscriber notify
                         $this->subscribeNotifyHandler->handle($response);
                         $this->write($id, $this->subscribeNotifyHandler->ack($response));
                     }
@@ -225,9 +225,8 @@ class GrpcClient
         return $id;
     }
 
-    protected function serverCheck(): bool
-    {
-        $request = new ServerCheckRequest();
+    protected function serverCheck(): bool {
+        $request  = new ServerCheckRequest();
         $tryTimes = 0;
         while (true) {
             try {
@@ -253,24 +252,22 @@ class GrpcClient
         throw new ConnectToServerFailedException('the nacos server is not ready to work in 15 seconds, connect to server failed');
     }
 
-    private function isWorkerExit(): bool
-    {
+    private function isWorkerExit(): bool {
         return CoordinatorManager::until(Constants::WORKER_EXIT)->isClosing();
     }
 
-    private function getMetadata(RequestInterface $request): array
-    {
+    private function getMetadata(RequestInterface $request): array {
         $metadata = [
-            'type' => $request->getType(),
+            'type'     => $request->getType(),
             'clientIp' => $this->ip(),
-            'headers' => [
+            'headers'  => [
                 'app' => $this->clientAppName
             ]
         ];
 
         if (!empty($this->config->getAccessKey()) && !empty($this->config->getAccessSecret())) {
-            $metadata['headers']['data'] = $this->getStringToSign($request);
-            $metadata['headers']['ak'] = $this->config->getAccessKey();
+            $metadata['headers']['data']      = $this->getStringToSign($request);
+            $metadata['headers']['ak']        = $this->config->getAccessKey();
             $metadata['headers']['signature'] = base64_encode(hash_hmac('sha1', $metadata['headers']['data'], $this->config->getAccessSecret(), true));
         }
 
@@ -281,10 +278,9 @@ class GrpcClient
         return $metadata;
     }
 
-    private function getStringToSign(RequestInterface $request): string
-    {
+    private function getStringToSign(RequestInterface $request): string {
         $serviceName = $request->getValue()['serviceName'] ?? '';
-        $groupName = $request->getValue()['groupName'] ?? '';
+        $groupName   = $request->getValue()['groupName'] ?? '';
 
         $signStr = (string)round(microtime(true) * 1000);
 
@@ -294,21 +290,19 @@ class GrpcClient
         return $signStr;
     }
 
-    private function grpcDefaultHeaders(): array
-    {
+    private function grpcDefaultHeaders(): array {
         return [
             'content-type' => 'application/grpc+proto',
-            'te' => 'trailers',
-            'user-agent' => 'Nacos-Kyy-Client:v3.0'
+            'te'           => 'trailers',
+            'user-agent'   => 'Nacos-Kyy-Client:v3.0'
         ];
     }
 
-    private function toResponse(mixed $data): Response
-    {
+    private function toResponse(mixed $data): Response {
         /** @var Payload $payload */
         $payload = Parser::deserializeMessage([Payload::class, 'decode'], $data);
 
-        $json = Json::decode($payload->getBody()->getValue());
+        $json  = Json::decode($payload->getBody()->getValue());
         $class = $this->mapping[$payload->getMetadata()->getType()] ?? null;
         if (!$class) {
             return new Response(...Arr::only($json, ['resultCode', 'errorCode', 'success', 'message', 'requestId']));
@@ -318,8 +312,7 @@ class GrpcClient
         return new $class($json);
     }
 
-    private function resubscribe(): void
-    {
+    private function resubscribe(): void {
         $this->logger->info('> resubscribe');
         if (!empty($this->subscribers)) {
             foreach ($this->subscribers as $subscriber) {
@@ -328,8 +321,7 @@ class GrpcClient
         }
     }
 
-    private function reRegister(): void
-    {
+    private function reRegister(): void {
         $this->logger->info('> reRegister');
         if (!empty($this->registers)) {
             foreach ($this->registers as $register) {
@@ -338,10 +330,9 @@ class GrpcClient
         }
     }
 
-    private function handleResponse(ResponseInterface $response): array
-    {
+    private function handleResponse(ResponseInterface $response): array {
         $statusCode = $response->getStatusCode();
-        $contents = (string)$response->getBody();
+        $contents   = (string)$response->getBody();
 
         if ($statusCode !== 200) {
             throw new RequestException($contents, $statusCode);
