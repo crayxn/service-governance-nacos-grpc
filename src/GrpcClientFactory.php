@@ -27,6 +27,7 @@ class GrpcClientFactory
             'guzzle_config' => $nacosConfig['guzzle']['config'] ?? null,
             'access_key' => $nacosConfig['access_key'] ?? null,
             'access_secret' => $nacosConfig['access_secret'] ?? null,
+            'grpc' => $nacosConfig['grpc'] ?? [],
         ]), $nacosConfig['namespace_id'] ?? '', $config->get('app_name', 'KYY'));
     }
 }
