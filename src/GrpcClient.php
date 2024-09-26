@@ -307,6 +307,15 @@ class GrpcClient {
         $json  = Json::decode($payload->getBody()->getValue());
         $class = $this->mapping[$payload->getMetadata()->getType()] ?? null;
         if (!$class) {
+            //可能出现 非正常response
+            if (!isset($json['resultCode'])) {
+                //把json记录
+                $this->logger?->error('Unexpected response :' . $payload->getBody()->getValue());
+                //适配一下 不要报错
+                $json['resultCode'] = 200;
+                $json['errorCode']  = $json['errorCode'] ?? 0;
+                $json['success']    = $json['success'] ?? true;
+            }
             return new Response(...Arr::only($json, ['resultCode', 'errorCode', 'success', 'message', 'requestId']));
         }
 
