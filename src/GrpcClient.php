@@ -194,14 +194,16 @@ class GrpcClient {
                         break;
                     }
                     $response = $client->recv($id, -1);
-                    $response = $this->toResponse($response->getBody());
-                    //handle
-                    if ($response instanceof ClientDetectionRequest) {
-                        $this->write($id, new ClientDetectionResponse(200, 0, true, '', $response->requestId));
-                    } elseif ($response instanceof NotifySubscriberRequest) {
-                        // handle subscriber notify
-                        $this->subscribeNotifyHandler->handle($response);
-                        $this->write($id, $this->subscribeNotifyHandler->ack($response));
+                    if ($response->getBody()) {
+                        $response = $this->toResponse($response->getBody());
+                        //handle
+                        if ($response instanceof ClientDetectionRequest) {
+                            $this->write($id, new ClientDetectionResponse(200, 0, true, '', $response->requestId));
+                        } elseif ($response instanceof NotifySubscriberRequest) {
+                            // handle subscriber notify
+                            $this->subscribeNotifyHandler->handle($response);
+                            $this->write($id, $this->subscribeNotifyHandler->ack($response));
+                        }
                     }
                 } catch (Throwable $e) {
                     !$this->isWorkerExit() && $this->logger->error("Nacos fail:{$e->getMessage()}, timestamp:" . time());
